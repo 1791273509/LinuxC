@@ -13,8 +13,14 @@ int main(int argc,char *argv[])
 
     switch(n)
     {
-        case 0 : printf("n = 0\n");
-        case 1 : printf("n = 1\n");
-        default : printf("n = other\n");
+        case 0 : 
+            printf("n = 0\n");
+            break;
+        case 1 : 
+            printf("n = 1\n");
+            break;
+        default : 
+            printf("n = other\n");
+            break;
     }
 }
