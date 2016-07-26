@@ -43,9 +43,13 @@ int main(int argc,char *argv[])
     {
         int stat_val;
         pid_t child_pid;
+        
+        //printf("stat_val的初始值为:%d\n", stat_val);
 
         child_pid = wait(&stat_val);
 
+	//printf("wait之后stat_val的值为:%d\n", stat_val);
+	
         printf("子进程已经结束, pid:%d\n", child_pid);
         
         if(WIFEXITED(stat_val))
