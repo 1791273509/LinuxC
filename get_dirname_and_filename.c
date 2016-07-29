@@ -21,7 +21,7 @@ int main(int argc,char *argv[])
     strcpy(thisDirname, dirname(path));
     printf("%s\n", filename);
     printf("%s\n", thisDirname);
-
+    
     return 0;
     //这是两个好用到哭的函数!!
     //通过getcwd()得到当前路径path,然后通过这两个函数,就能分别得到当前的文件名和目录名!!
