@@ -650,4 +650,6 @@ void shell_main(int argc, char *argv[])
 int main(int argc,char *argv[])
 {
     shell_main(argc, argv);
+    
+    return 0;
 }
