@@ -28,6 +28,11 @@
 #define LOG         '1'
 #define REG         '2'
 
+#define SHOWUSER    'u'
+#define CHANGE      'c'
+#define ADD         'a'
+#define REMOVE      'r'
+
 typedef struct DATE         //日期结构体
 {
     int month;
@@ -87,6 +92,7 @@ int number;
 char username[20];
 char getResult = FAIL;
 char logFail;
+ALL userinfoAll;
 GtkWidget *messageWindow;
 static GtkWidget *entry1;
 static GtkWidget *entry2;
@@ -97,35 +103,155 @@ void client_main(int argc, char *argv[]);
 void client_init(int argc, char *argv[]);
 void loginInterface(int argc, char *argv[]);
 char aboutState(GtkWidget *widget, gpointer data);
-void loginFunction(GtkWidget *widget, gpointer data);
+void loginFunction(GtkWidget *widget, gpointer *data);
 void messagePromptInterface(int argc, char *argv[]);
 void registeredInterface(GtkWidget *widget, gpointer data, int argc, char *argv[]);
 void registeredFunction(GtkWidget *widget, gpointer *entry[], int argc, char *argv[]);
 void mainInterface(int argc, char *argv[]);
 void client_recv();
 void dealMain(ALL messageAll);
-void showInfoFunction();
-void changedUserinfoFunction();
+void showUserinfoFunction(int argc, char *argv[]);
+void changedUserinfoFunction(int argc, char *argv[]);
+void showUserinfoInterface(ALL userinfoAll);
 
-void changedUserinfoFunction()
+void showUserinfoInterface(ALL userinfoAll)
 {
+   	GtkWidget *window;
+    GtkWidget *bigBox;
+    GtkWidget *box[7];
+    GtkWidget *label[7];
+    char text[7][50];
+    GtkWidget *sep;
+    GtkWidget *image;
+    int i;
+    char tmp[4][20];
 
+    printf("界面还没初始化\n");
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(gtk_main_quit), NULL);
+    gtk_window_set_title(GTK_WINDOW(window), "资料卡");
+    gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
+    gtk_container_set_border_width(GTK_CONTAINER(window), 50);
+
+    bigBox = gtk_vbox_new(FALSE, 0);
+    gtk_container_add(GTK_CONTAINER(window), bigBox);
+
+    image = gtk_image_new_from_file("userinfo.png");
+    gtk_box_pack_start(GTK_BOX(bigBox), image, FALSE, FALSE, 0);
+    
+    sep = gtk_hseparator_new();
+    gtk_box_pack_start(GTK_BOX(bigBox), sep, FALSE, FALSE, 10);
+
+    for(i = 0; i < 7; i++)
+    {
+        box[i] = gtk_hbox_new(TRUE, 0);
+        gtk_box_pack_start(GTK_BOX(bigBox), box[i], FALSE, FALSE, 0);
+    }
+    
+    strcpy(text[0], "            帐号: ");
+    itoa(userinfoAll.reginfo.userinfo.usernum, tmp[2], 10);
+    strcat(text[0], tmp[2]);
+    label[0] = gtk_label_new(text[0]);
+    gtk_box_pack_start(GTK_BOX(box[0]), label[0], FALSE, FALSE, 5);
+
+    printf("昵称之前\n");
+
+    strcpy(text[1], "       昵称: ");
+    strcat(text[1], userinfoAll.reginfo.userinfo.username);
+    label[1] = gtk_label_new(text[1]);
+    gtk_label_set_justify(GTK_LABEL(label[1]), GTK_JUSTIFY_LEFT);
+    gtk_box_pack_start(GTK_BOX(box[1]), label[1], FALSE, FALSE, 5);
+
+    printf("性别之前\n");
+
+    strcpy(text[2], "性别: ");
+    strcat(text[2], userinfoAll.reginfo.userinfo.sex);
+    label[2] = gtk_label_new(text[2]);
+    gtk_box_pack_start(GTK_BOX(box[2]), label[2], FALSE, FALSE, 5);
+
+    printf("年龄之前\n");
+
+    strcpy(text[3], "年龄: ");
+    itoa(userinfoAll.reginfo.userinfo.age, tmp[3], 10);
+    strcat(text[3], tmp[3]);
+    label[3] = gtk_label_new(text[3]);
+    gtk_box_pack_start(GTK_BOX(box[3]), label[3], FALSE, FALSE, 5);
+
+    printf("生日之前\n");
+
+    strcpy(text[4], "       生日: ");
+    itoa(userinfoAll.reginfo.userinfo.date.month, tmp[0], 10);
+    strcat(text[4], tmp[0]);
+    strcat(text[4], "月");
+    itoa(userinfoAll.reginfo.userinfo.date.day, tmp[1], 10);
+    strcat(text[4], tmp[1]);
+    strcat(text[4], "日");
+    label[4] = gtk_label_new(text[4]);
+    gtk_box_pack_start(GTK_BOX(box[4]), label[4], FALSE, FALSE, 5);
+
+    printf("星座之前\n");
+
+    strcpy(text[5], "       星座: ");
+    strcat(text[5], userinfoAll.reginfo.userinfo.constell);
+    label[5] = gtk_label_new(text[5]);
+    gtk_box_pack_start(GTK_BOX(box[5]), label[5], FALSE, FALSE, 5);
+
+    printf("个性签名之前\n");
+
+    strcpy(text[6], "       个性签名: ");
+    printf("text[6]第一步:%s\n", text[6]);
+    strcat(text[6], userinfoAll.reginfo.userinfo.sentence);
+    printf("text[6]第一二步:%s\n", text[6]);
+    label[6] = gtk_label_new(text[6]);
+    printf("新建了标签\n");
+    gtk_box_pack_start(GTK_BOX(box[6]), label[6], FALSE, FALSE, 5);
+
+    printf("结束\n");
+
+    gtk_widget_show_all(window);
+    gtk_main(); 
+}
+void changedUserinfoFunction(int argc, char *argv[])
+{
+    ALL changAll;
+
+    changAll.mark = CHANGE;
+    if(send(conn_fd, &changAll, sizeof(ALL), 0) < 0)
+    {
+        my_error("send", __LINE__);
+    }
 }
 
-void showInfoFunction()
+void showUserinfoFunction(int argc, char *argv[])
 {
+    ALL showUserAll;
 
+    showUserAll.mark = SHOWUSER;
+    printf("这是一个显示个人资料的请求, 其标记为:%c\n", showUserAll.mark);
+    if(send(conn_fd, &showUserAll, sizeof(ALL), 0) < 0)
+    {
+        my_error("send", __LINE__);
+    }
+    printf("showUserinfoFunction中, 已经将请求发送给服务器, 等待服务器响应\n");
 }
 
 void dealMain(ALL messageAll)
 {
-	
+    //客户端接收到的消息主要有:好友验证, 好友消息, 群聊消息等等
+    printf("这次接收到的消息mark为:%c\n", messageAll.mark);
+    if(messageAll.mark == SHOWUSER)
+    {
+        //每当接收一次服务器发送过来的用户资料信息, 就把它存储在客户端的全局用户资料结构体中, 为后面更改资料提供信息
+        userinfoAll = messageAll;
+        //将当前接收到的信息存储好之后, 就调用showUserinfoInterface资料卡
+        showUserinfoInterface(userinfoAll);
+    }
 }
-
 void client_recv()
 {
     ALL messageAll;
 
+    printf("这里是client_recv函数\n");
     while(1)
     {
         if(recv(conn_fd, &messageAll, sizeof(messageAll), 0) < 0)
@@ -153,6 +279,7 @@ void mainInterface(int argc, char *argv[])
     int i;
     char welcome[50];
 
+    printf("username:%s\n", username);
     strcpy(welcome, "hello, ");
     strcat(welcome, username);
     strcat(welcome, ", 欢迎回来!");
@@ -164,6 +291,8 @@ void mainInterface(int argc, char *argv[])
     gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
     gtk_container_set_border_width(GTK_CONTAINER(window), 50);
 
+    printf("主界面初始化成功!\n");
+
     bigBox = gtk_vbox_new(FALSE, 0);
     gtk_container_add(GTK_CONTAINER(window), bigBox);
 
@@ -174,15 +303,15 @@ void mainInterface(int argc, char *argv[])
 
     //image1 = gtk_image_new_from_file("main1.jpg");
     //gtk_box_pack_start(GTK_BOX(bigBox), image1, FALSE, FALSE, 0);
+    
     for(i = 0; i < 9; i++)
     {
         box[i] = gtk_vbox_new(TRUE, 0);
         gtk_box_pack_start(GTK_BOX(bigBox), box[i], FALSE, FALSE, 0);
-        printf("第%d个盒子放置成功!\n", i+1);
     }
 
     button[0] = gtk_button_new_with_label("查看我的资料");
-    g_signal_connect(G_OBJECT(button[0]), "clicked", G_CALLBACK(showInfoFunction), NULL);
+    g_signal_connect(G_OBJECT(button[0]), "clicked", G_CALLBACK(showUserinfoFunction), NULL);
     //g_signal_connect_swapped(G_OBJECT(button[0]), "clicked", G_CALLBACK(gtk_main_quit), NULL);
     gtk_box_pack_start(GTK_BOX(box[0]), button[0], FALSE, FALSE, 5);
     //sep = gtk_hseparator_new();
@@ -554,7 +683,7 @@ void messagePromptInterface(int argc, char *argv[])
     gtk_main();
 }
 
-void loginFunction(GtkWidget *widget, gpointer data)
+void loginFunction(GtkWidget *widget, gpointer *data)
 {
     ALL all;                //储存要发送给服务器的登录信息结构体
     char state;             //得到在线还是隐身的状态
@@ -564,12 +693,10 @@ void loginFunction(GtkWidget *widget, gpointer data)
     char recvBuf[BUFSIZE] = {0};
     //char getResult;
     
-    logFail = SUCCESS;
-
     usernum = gtk_entry_get_text(GTK_ENTRY(entry1));
     password = gtk_entry_get_text(GTK_ENTRY(entry2));
-    state = GPOINTER_TO_INT(data);
-    //printf("%c\n", state);
+    state = GPOINTER_TO_INT(*data);
+    printf("%c\n", state);
     
     all.loginfo.usernum = atoi(usernum);
     strcpy(all.loginfo.password, password);
@@ -589,6 +716,7 @@ void loginFunction(GtkWidget *widget, gpointer data)
     else
     {
         printf("标志位发送成功!\n");
+        logFail = SUCCESS;
         if(send(conn_fd, &all, sizeof(ALL), 0) < 0)  //第二次send要发送了!!!!!!!
         {
             my_error("send", __LINE__);
@@ -642,6 +770,8 @@ void loginInterface(int argc, char *argv[])
     GtkWidget *image;       //登录界面的图片
     char mark;              //接收判断在线或隐身后的标志
 
+    logFail = FAIL;
+
     gtk_init(&argc, &argv);
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     g_signal_connect(G_OBJECT(window), "destroy", G_CALLBACK(gtk_main_quit), NULL);
@@ -687,6 +817,7 @@ void loginInterface(int argc, char *argv[])
     gtk_box_pack_start(GTK_BOX(box3), radio, TRUE, TRUE, 50);
     
     mark = aboutState(radio, NULL);
+    printf("mark:%c\n", mark);
     
 	button1 = gtk_button_new_with_label("登录");
     g_signal_connect(G_OBJECT(button1), "clicked", G_CALLBACK(loginFunction), &mark);//此处回调登录函数
@@ -771,13 +902,17 @@ void client_main(int argc, char *argv[])
     //调用登录界面函数
     loginInterface(argc, argv);
 
+    printf("登录界面调用完成\n");
     //如果登录失败又取消重新登录, 那么就结束这个客户端的进程
     if(logFail == FAIL)
     {
         exit(0);
     }
-    
+    printf("logFail:%c\n", logFail);
+
     //如果登录失败, 调用对话框提示重新登录或者取消
+    printf("getResult:%c\n", getResult);
+
     if(getResult == FAIL)
     {
         messagePromptInterface(argc, argv);
@@ -789,12 +924,17 @@ void client_main(int argc, char *argv[])
         {
             my_error("recv", __LINE__);
         }
+        printf("接收服务器的用户信息成功!\n");
+
         strcpy(username, userinfoAll.userinfo.username);
+        printf("用户名称已经得到成功!\n");
 
         //再创建一个recv线程, 然后调用主界面函数
         pthread_create(&recvPid, NULL, (void *)client_recv, NULL);
+        printf("线程创建成功!\n");
         
         mainInterface(argc, argv);
+        printf("会调用到主界面\n");
     }
 }
 
@@ -839,5 +979,6 @@ void my_error(const char *err_string, int line)
 
 int main(int argc,char *argv[])
 {
+    gtk_init(&argc, &argv);
 	client_main(argc, argv);
 }

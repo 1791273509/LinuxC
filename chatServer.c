@@ -30,6 +30,11 @@
 #define FAIL        'n'
 #define SUCCESS     'y'
 
+#define SHOWUSER    'u'
+#define CHANGE      'c'
+#define ADD         'a'
+#define REMOVE      'r'
+
 typedef struct DATE         //日期结构体
 {
     int month;
@@ -57,7 +62,7 @@ typedef struct REGINFO      //用户注册信息结构体
 {
     char password[17];          //不超过16位的密码
     USERINFO userinfo;          //用户基本信息
-    FRIENDINFO *friendlist;     //好友列表
+    FRIENDINFO friendlist[200];     //好友列表
 }REGINFO;
 
 typedef struct LOGINFO      //用户登录结构体
@@ -102,6 +107,65 @@ void createDirAndFile(ALL regAll);
 void itoa(unsigned long val, char *buf, unsigned radix);
 int getFileLen(int fd);
 void addOnlineList(ONLINELIST *head, ALL logAll, int conn_fd);
+void server_recv(ALL userinfoAll);
+void dealMain(ALL recvAll, ALL userinfoAll);
+void showUserinfo(ALL userinfoAll);
+void changedUserinfo(ALL recvAll);
+
+void changedUserinfo(ALL recvAll)
+{
+    //将接收到的结构体里面的用户信息提取出来, 将原本的用户信息清空, 再将新的用户信息写进去
+}
+
+void showUserinfo(ALL userinfoAll)
+{
+    printf("showUserinfo功能函数\n");
+
+    userinfoAll.mark = SHOWUSER;
+    if(send(conn_fd, &userinfoAll, sizeof(ALL), 0) < 0)
+    {
+        my_error("send", __LINE__);
+    }
+}
+
+void dealMain(ALL recvAll, ALL userinfoAll)
+{
+    printf("进入了dealMain函数中!\n");
+    printf("这次recv到的结构体的mark标记为:%c\n", recvAll.mark);
+    //这个处理函数中, 专门根据不同的mark标记, 对recv到的各种结构体进行处理
+    if(recvAll.mark == SHOWUSER)
+    {
+        showUserinfo(userinfoAll);
+    }
+    else if(recvAll.mark == CHANGE)
+    {
+        changedUserinfo(recvAll);
+    }
+}
+
+void server_recv(ALL userinfoAll)
+{
+    ALL recvAll;
+    int endMark;
+
+    printf("这里是server_recv\n");
+
+    while(1)
+    {
+        endMark = -1;
+        if((endMark = recv(conn_fd, &recvAll, sizeof(recvAll), 0)) < 0)
+        {
+            my_error("recv", __LINE__);
+        }
+        else if(endMark == 0)
+        {
+            pthread_exit(0);
+        }
+       
+        printf("在服务器端的dealMain处理之前, 先查看一下它的mark标记:%c\n", recvAll.mark);
+        dealMain(recvAll, userinfoAll);
+    }
+}
 
 void addOnlineList(ONLINELIST *head, ALL logAll, int conn_fd)
 {
@@ -282,6 +346,7 @@ void server_main(ONLINELIST *head)
     char passwordBuf[30];   //将读取密码文件时读出的密码暂时存放在这个缓冲区中
     int sysNumberFd;
     int userinfoFd;
+    pthread_t recvPid;
 
     //先与客户端进行交互, 完成登录注册
     while(1)
@@ -296,12 +361,15 @@ void server_main(ONLINELIST *head)
         }
         else if(endMark == 0)
         {
+            printf("recv 0\n");
             pthread_exit(0);
         }
         else
         {
+            printf("recv到:%c\n", oneMark);
             if(oneMark == LOG)
             {
+                getResult = FAIL;
                 //登录
                 if(recv(conn_fd, &logAll, sizeof(ALL), 0) < 0)
                 {
@@ -332,22 +400,24 @@ void server_main(ONLINELIST *head)
                             if((passwordFd = open(filePasswordName, O_RDWR)) < 0)
                             {
                                 my_error("open", __LINE__);
-                                fileLen = getFileLen(passwordFd);
-
-                                if((ret = read(passwordFd, passwordBuf, fileLen)) < 0)
-                                {
-                                    my_error("read", __LINE__);
-                                }
-                                printf("###当前登录的用户的密码为:%s\n", passwordBuf);
-
-                                if(!strcmp(passwordBuf, logAll.loginfo.password))
-                                {
-                                    getResult = SUCCESS;
-                                }
-                                break;
                             }
+                            fileLen = getFileLen(passwordFd);
+
+                            if((ret = read(passwordFd, passwordBuf, fileLen)) < 0)
+                            {
+                                my_error("read", __LINE__);
+                            }
+                            printf("###当前登录的用户的密码为:%s\n", passwordBuf);
+
+                            if(!strcmp(passwordBuf, logAll.loginfo.password))
+                            {
+                                getResult = SUCCESS;
+                            }
+                            break;
                         }
                     }
+
+                    printf("登录结果getResult:%c\n", getResult);
 
                     //读取结果用getResult发送
                     //若帐号不存在或帐号存在密码不正确则返回n
@@ -374,7 +444,7 @@ void server_main(ONLINELIST *head)
                         }
                         printf("用户信息的文件内容已经读出\n");
                         close(userinfoFd);
-                        printf("用户信息的文件已经关闭");
+                        printf("用户信息的文件已经关闭\n");
 
                         if(send(conn_fd, &userinfoAll, sizeof(ALL), 0) < 0)
                         {
@@ -384,6 +454,7 @@ void server_main(ONLINELIST *head)
                         
                         //将该客户端的信息存储在当前在线信息链表中
                         addOnlineList(head, logAll, conn_fd);
+                        server_recv(userinfoAll);
                     }
                 }
                 closedir(dir);
@@ -463,10 +534,7 @@ void server_main(ONLINELIST *head)
             }
         }
     }
-
-    //然后再创建一个recv线程
-    //再写一个dealMain处理mark的全部情况
-    }
+}
 
 void server_init(int argc, char *argv[])
 {
