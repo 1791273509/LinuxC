@@ -27,6 +27,9 @@
 #define LOG         '1'
 #define REG         '2'
 
+#define ONLINE      'l'
+#define STEALTH     's'
+
 #define FAIL        'n'
 #define SUCCESS     'y'
 
@@ -34,6 +37,7 @@
 #define CHANGE      'c'
 #define ADD         'a'
 #define REMOVE      'r'
+#define VIEW        'v'
 
 typedef struct DATE         //日期结构体
 {
@@ -44,7 +48,8 @@ typedef struct DATE         //日期结构体
 typedef struct FRIENDINFO   //好友列表结构体
 {
     int usernum;
-    char name[20];
+    char username[20];
+    char state;
 }FRIENDINFO;
 
 typedef struct USERINFO     //用户基本信息结构体
@@ -71,9 +76,11 @@ typedef struct LOGINFO      //用户登录结构体
     char password[17];
     char state;             //状态
 }LOGINFO;
+
 typedef struct MESSAGE
 {
-    FRIENDINFO friendinfo;  //好友的信息,包含好友的帐号,好友的名字,根据好友帐号查询他的conn_fd,名字提供聊天框信息
+    USERINFO selfinfo;
+    USERINFO friendinfo;
     char messagecontent[BUFSIZE];   //消息内容  
 }MESSAGE;
 
@@ -82,9 +89,9 @@ typedef struct ALL
     char mark;              //标志数据类型
     REGINFO reginfo;        //注册结构体
     LOGINFO loginfo;        //登录结构体
-    USERINFO userinfo;      //存储用户个人信息的结构体
-    USERINFO friendallinfo; //存储好友的个人完整信息的结构体
+    USERINFO userinfo;
     MESSAGE message;
+    FRIENDINFO friendlist[200];
 }ALL;
 
 typedef struct ONLINELIST
@@ -107,43 +114,315 @@ void createDirAndFile(ALL regAll);
 void itoa(unsigned long val, char *buf, unsigned radix);
 int getFileLen(int fd);
 void addOnlineList(ONLINELIST *head, ALL logAll, int conn_fd);
-void server_recv(ALL userinfoAll);
-void dealMain(ALL recvAll, ALL userinfoAll);
-void showUserinfo(ALL userinfoAll);
-void changedUserinfo(ALL recvAll);
+void server_recv(ALL userinfoAll, char tmpUsernumChar[], ONLINELIST *head);
+void dealMain(ALL recvAll, ALL userinfoAll, char tmpUsernumChar[], ONLINELIST *head);
+void showUserinfo(char tmpUsernumChar[]);
+void changedUserinfo(ALL recvAll, char tmpUsernumChar[]);
+void addFriend(ALL recvAll, ONLINELIST *head);
+void agreeRequest(ALL recvAll);
+void viewFriend(ALL recvAll, ONLINELIST *head);
 
-void changedUserinfo(ALL recvAll)
+void viewFriend(ALL recvAll, ONLINELIST *head)
 {
-    //将接收到的结构体里面的用户信息提取出来, 将原本的用户信息清空, 再将新的用户信息写进去
-}
+    //在recvAll中读取出发送请求的用户信息, 然后根据用户的信息打开用户的主目录
+    //将主目录下的好友列表信息读取出来
+    ALL friendlistAll;
+    char fileFriendlist[255] = {"chat/"};
+    char userNumChar[20];
+    int userFd;
+    ONLINELIST *p;
+    int i = 0;
 
-void showUserinfo(ALL userinfoAll)
-{
-    printf("showUserinfo功能函数\n");
+    memset(&friendlistAll, 0, sizeof(ALL));
+    friendlistAll.mark = VIEW;
 
-    userinfoAll.mark = SHOWUSER;
-    if(send(conn_fd, &userinfoAll, sizeof(ALL), 0) < 0)
+    itoa(recvAll.userinfo.usernum, userNumChar, 10);
+    strcat(fileFriendlist, userNumChar);
+    strcat(fileFriendlist, "/friendlist.txt");
+
+    if((userFd = open(fileFriendlist, O_RDWR)) < 0)
+    {
+        my_error("open", __LINE__);
+    }
+    if(read(userFd, friendlistAll.friendlist, sizeof(friendlistAll.friendlist)) < 0)
+    {
+        my_error("read", __LINE__);
+    }
+    close(userFd);
+   
+    for(i = 0; friendlistAll.friendlist[i].usernum != 0; i++)
+    {
+        for(p = head->next; p; p = p->next)
+        {
+            if(friendlistAll.friendlist[i].usernum == p->usernum)
+            {
+                friendlistAll.friendlist[i].state = ONLINE;
+            }
+        }
+    }
+
+    if(send(conn_fd, &friendlistAll, sizeof(ALL), 0) < 0)
     {
         my_error("send", __LINE__);
     }
 }
 
-void dealMain(ALL recvAll, ALL userinfoAll)
+void agreeRequest(ALL recvAll)
 {
-    printf("进入了dealMain函数中!\n");
-    printf("这次recv到的结构体的mark标记为:%c\n", recvAll.mark);
-    //这个处理函数中, 专门根据不同的mark标记, 对recv到的各种结构体进行处理
-    if(recvAll.mark == SHOWUSER)
+    //这个recvAll结构体中保护含了两个用户的信息, 
+    //现在要在他们的好友列表里互相添加彼此的信息, 并将好友的信息写入他们彼此的friendlist文件里
+    //然后建立聊天记录文件
+    
+    FRIENDINFO userfriendlist[200];
+    FRIENDINFO friendfriendlist[200];
+    char userfileFriendlist[255] = {"chat/"};
+    char friendfileFriendlist[255] = {"chat/"};
+    char userNumChar[20];
+    char friendNumChar[20];
+    int userFd;
+    int friendFd;
+    int i;
+
+    //得到两个人的好友列表文件
+    itoa(recvAll.message.selfinfo.usernum, userNumChar, 10);
+    itoa(recvAll.message.friendinfo.usernum, friendNumChar, 10);
+    
+    strcat(userfileFriendlist, userNumChar);
+    strcat(userfileFriendlist, "/friendlist.txt");
+
+    strcat(friendfileFriendlist, friendNumChar);
+    strcat(friendfileFriendlist, "/friendlist.txt");
+
+    //先在彼此的好友列表中添加信息
+    if((userFd = open(userfileFriendlist, O_RDWR)) < 0)
     {
-        showUserinfo(userinfoAll);
+        my_error("open", __LINE__);
     }
-    else if(recvAll.mark == CHANGE)
+    if(read(userFd, &userfriendlist, sizeof(userfriendlist)) < 0)
     {
-        changedUserinfo(recvAll);
+        my_error("read", __LINE__);
+    }
+    for(i = 0; userfriendlist[i].usernum != 0; i++)
+    {
+        ;
+    }
+    userfriendlist[i].usernum = recvAll.message.friendinfo.usernum;
+    strcpy(userfriendlist[i].username, recvAll.message.friendinfo.username);
+    close(userFd);
+
+    if((userFd = open(userfileFriendlist, O_RDWR | O_TRUNC)) < 0)
+    {
+        my_error("open", __LINE__);
+    }
+
+    if(write(userFd, &userfriendlist, sizeof(userfriendlist)) != sizeof(userfriendlist))
+    {
+        my_error("write", __LINE__);
+    }
+    close(userFd);
+
+    if((friendFd = open(friendfileFriendlist, O_RDWR)) < 0)
+    {
+       my_error("open", __LINE__); 
+    }
+    if(read(friendFd, &friendfriendlist, sizeof(friendfriendlist)) < 0)
+    {
+        my_error("read", __LINE__);
+    }
+    for(i = 0; friendfriendlist[i].usernum != 0; i++)
+    {
+        ;
+    }
+    friendfriendlist[i].usernum = recvAll.message.selfinfo.usernum;
+    strcpy(friendfriendlist[i].username, recvAll.message.selfinfo.username);
+    close(friendFd);
+
+    if((friendFd = open(friendfileFriendlist, O_RDWR | O_TRUNC)) < 0)
+    {
+        my_error("open", __LINE__);
+    }
+    if(write(friendFd, &friendfriendlist, sizeof(friendfriendlist)) != sizeof(friendfriendlist))
+    {
+        my_error("write", __LINE__);
+    }
+    close(friendFd);
+}
+
+void addFriend(ALL recvAll, ONLINELIST *head)
+{
+    char fileUserinfoName[255];
+    char friendnumberChar[20];
+    DIR *dir;
+    struct dirent *dirent;
+    ALL resultAll;      //定义一个备用的结构体, 如果要添加的帐号不存在, 那么就直接返回一个查找不到的信息
+    ALL addfriendAll;   //这是要转发给要添加的好友的结构体
+    int friend_fd;      //根据好友帐号查找的conn_fd
+    ONLINELIST *p;
+
+    memset(&addfriendAll, 0, sizeof(ALL));
+    addfriendAll.mark = ADD;
+
+    memset(&resultAll, 0, sizeof(ALL));
+    resultAll.mark = FAIL;  //这是定义好的备用的要返回给客户端的查找失败结构体
+
+    strcpy(fileUserinfoName, "chat/");
+    itoa(recvAll.message.friendinfo.usernum, friendnumberChar, 10);
+    strcat(fileUserinfoName, friendnumberChar);
+    
+    //根据客户端发过来的帐号查找, 若帐号不应存在则直接发送不存在,
+    //若存在, 则在在线链表中查找对应的用户的conn_fd
+    if((dir = opendir(fileUserinfoName)) == NULL)
+    {
+        if(send(conn_fd, &resultAll, sizeof(ALL), 0) < 0)
+        {
+            my_error("send", __LINE__);
+        }
+    }
+    else
+    {
+        for(p = head->next; p; p = p->next)
+        {
+            if(recvAll.message.friendinfo.usernum == p->usernum)
+            {
+                friend_fd = p->conn_fd;
+                printf("对方的conn_fd为:%d\n", friend_fd);
+                break;
+            }
+        }
+        
+        //当发送到对方的客户端时, 发送者的信息就变成了friendinfo
+        addfriendAll.message.friendinfo = recvAll.message.selfinfo; 
+        if(send(friend_fd, &addfriendAll, sizeof(ALL), 0) < 0)
+        {
+            my_error("send", __LINE__);
+        }
+
+        printf("申请发送成功\n");
     }
 }
 
-void server_recv(ALL userinfoAll)
+void changedUserinfo(ALL recvAll, char tmpUsernumChar[])
+{
+    char fileUserinfoName[255];
+    int userinfoFd;
+    int tmpusernum;
+    
+    printf("开始调用changedUserinfo这个函数\n");
+    
+    printf("changedUserinfo中的用户信息如下:\n");
+    printf("userinfoAll.userinfo.username:%s\n", recvAll.userinfo.username);
+    printf("userinfoAll.userinfo.sex:%s\n", recvAll.userinfo.sex);
+    printf("userinfoAll.userinfo.age:%d\n", recvAll.userinfo.age);
+    printf("userinfoAll.userinfo.date.month:%d\n", recvAll.userinfo.date.month);
+    printf("userinfoAll.userinfo.date.day:%d\n", recvAll.userinfo.date.day);
+    printf("userinfoAll.userinfo.constell:%s\n", recvAll.userinfo.constell);
+    printf("userinfoAll.userinfo.sentence:%s\n", recvAll.userinfo.sentence);
+
+    recvAll.userinfo.usernum = atoi(tmpUsernumChar);
+    //将接收到的结构体里面的用户信息提取出来, 将原本的用户信息清空, 再将新的用户信息写进去
+    strcpy(fileUserinfoName, "chat/");
+    strcat(fileUserinfoName, tmpUsernumChar);
+    strcat(fileUserinfoName, "/userinfo.txt");
+
+    printf("当前要修改的用户的信息文件名为:%s\n", fileUserinfoName);
+
+    if((userinfoFd = open(fileUserinfoName, O_RDWR | O_TRUNC)) < 0)
+    {
+        my_error("open", __LINE__);
+    }
+    if(write(userinfoFd, &recvAll.userinfo, sizeof(USERINFO)) != sizeof(USERINFO))
+    {
+        my_error("write", __LINE__);
+    }
+    close(userinfoFd);
+}
+
+void showUserinfo(char tmpUsernumChar[])
+{
+    int userinfoFd;
+    char fileUserinfoName[255];
+    ALL userinfoAll;
+    int ret;
+
+    printf("showUserinfo功能函数\n");
+
+    memset(&userinfoAll, 0, sizeof(ALL));
+    userinfoAll.mark = SHOWUSER;
+
+    strcpy(fileUserinfoName, "chat/");
+    strcat(fileUserinfoName, tmpUsernumChar);
+    strcat(fileUserinfoName, "/userinfo.txt");
+    if((userinfoFd = open(fileUserinfoName, O_RDWR)) < 0)
+    {
+        my_error("open", __LINE__);
+    }
+    printf("用户信息的文件已经打开\n");
+    if((ret = read(userinfoFd, &userinfoAll.userinfo, sizeof(USERINFO))) < 0)
+    {
+        my_error("read", __LINE__);
+    }
+    printf("用户信息的文件内容已经读出\n");
+    close(userinfoFd);
+    printf("用户信息的文件已经关闭\n");
+    
+    printf("showUserinfo中的用户信息如下:\n");
+    printf("userinfoAll.userinfo.username:%s\n", userinfoAll.userinfo.username);
+    printf("userinfoAll.userinfo.sex:%s\n", userinfoAll.userinfo.sex);
+    printf("userinfoAll.userinfo.age:%d\n", userinfoAll.userinfo.age);
+    printf("userinfoAll.userinfo.date.month:%d\n", userinfoAll.userinfo.date.month);
+    printf("userinfoAll.userinfo.date.day:%d\n", userinfoAll.userinfo.date.day);
+    printf("userinfoAll.userinfo.constell:%s\n", userinfoAll.userinfo.constell);
+    printf("userinfoAll.userinfo.sentence:%s\n",userinfoAll.userinfo.sentence);
+    
+    if(send(conn_fd, &userinfoAll, sizeof(ALL), 0) < 0)
+    {
+        my_error("send", __LINE__);
+    }
+    printf("用户信息已经发送给客户端\n");	
+}
+
+void dealMain(ALL recvAll, ALL userinfoAll, char tmpUsernumChar[], ONLINELIST *head)
+{
+    printf("进入了dealMain函数中!\n");
+    printf("这次recv到的结构体的mark标记为:%c\n", recvAll.mark);
+
+    //这个处理函数中, 专门根据不同的mark标记, 对recv到的各种结构体进行处理
+    if(recvAll.mark == SHOWUSER)
+    {
+        printf("mark = u时\n");
+        //printf("dealMain中的用户信息如下:\n");
+        //printf("userinfoAll.userinfo.username:%s\n", userinfoAll.userinfo.username);
+        //printf("userinfoAll.userinfo.sex:%s\n", userinfoAll.userinfo.sex);
+        //printf("userinfoAll.userinfo.age:%d\n", userinfoAll.userinfo.age);
+        //printf("userinfoAll.userinfo.date.month:%d\n", userinfoAll.userinfo.date.month);
+        //printf("userinfoAll.userinfo.date.day:%d\n", userinfoAll.userinfo.date.day);
+        //printf("userinfoAll.userinfo.constell:%s\n", userinfoAll.userinfo.constell);
+        //printf("userinfoAll.userinfo.sentence:%s\n",userinfoAll.userinfo.sentence);
+
+        showUserinfo(tmpUsernumChar);
+    }
+    else if(recvAll.mark == CHANGE)
+    {
+        printf("要调用changedUserinfo这个函数了\n");
+        changedUserinfo(recvAll, tmpUsernumChar);
+    }
+    else if(recvAll.mark == ADD)
+    {
+        addFriend(recvAll, head);
+    }
+    else if(recvAll.mark = SUCCESS)
+    {
+        //如果得到成功即同意的消息, 那么就应该在selfinfo和friendinfo的好友列表里里面都加上彼此的信息
+        agreeRequest(recvAll);
+    }
+    else if(recvAll.mark == VIEW)
+    {
+        //如果得到要查看好友的消息, 则将此用户的所有好友带上标记位一起发过去, 在客户端进行处理
+        viewFriend(recvAll, head);
+    }
+}
+
+void server_recv(ALL userinfoAll, char tmpUsernumChar[], ONLINELIST *head)
 {
     ALL recvAll;
     int endMark;
@@ -163,7 +442,17 @@ void server_recv(ALL userinfoAll)
         }
        
         printf("在服务器端的dealMain处理之前, 先查看一下它的mark标记:%c\n", recvAll.mark);
-        dealMain(recvAll, userinfoAll);
+        
+        //printf("server_recv中的用户信息如下\n");
+        //printf("userinfoAll.userinfo.username:%s\n", userinfoAll.userinfo.username);
+        //printf("userinfoAll.userinfo.sex:%s\n", userinfoAll.userinfo.sex);
+        //printf("userinfoAll.userinfo.age:%d\n", userinfoAll.userinfo.age);
+        //printf("userinfoAll.userinfo.date.month:%d\n", userinfoAll.userinfo.date.month);
+        //printf("userinfoAll.userinfo.date.day:%d\n", userinfoAll.userinfo.date.day);
+        //printf("userinfoAll.userinfo.constell:%s\n", userinfoAll.userinfo.constell);
+        //printf("userinfoAll.userinfo.sentence:%s\n",userinfoAll.userinfo.sentence);
+
+        dealMain(recvAll, userinfoAll, tmpUsernumChar, head);
     }
 }
 
@@ -243,8 +532,6 @@ void itoa(unsigned long val, char *buf, unsigned radix)
 
 void createDirAndFile(ALL regAll)
 {
-    USERINFO userInfo;
-
     char userDirName[255];
     char tmpName[30] = {"chat/"};
     char passwordBuf[20] = {0};
@@ -258,6 +545,10 @@ void createDirAndFile(ALL regAll)
     char filePassword[4096] = {0};
     char fileFriendlist[4096] = {0};
     char dirChatRecord[4096] = {0};
+
+    FRIENDINFO friendlist[200];
+
+    memset(friendlist, 0, sizeof(friendlist));
 
 
     //先要创建用户主目录;
@@ -290,9 +581,7 @@ void createDirAndFile(ALL regAll)
         my_error("open", __LINE__);
     }
 
-    userInfo = regAll.reginfo.userinfo;
-
-    if(write(userInfoFd, &userInfo, sizeof(USERINFO)) != sizeof(USERINFO))
+    if(write(userInfoFd, &regAll.reginfo.userinfo, sizeof(USERINFO)) != sizeof(USERINFO))
     {
         my_error("write", __LINE__);
     }
@@ -318,6 +607,11 @@ void createDirAndFile(ALL regAll)
     if((friendlistFd = open(fileFriendlist, O_RDWR | O_CREAT, 0777)) < 0)
     {
         my_error("open", __LINE__);
+    }
+    
+    if(write(friendlistFd, &friendlist, sizeof(friendlist)) != sizeof(friendlist))
+    {
+        my_error("write", __LINE__);
     }
 
     close(friendlistFd);
@@ -454,7 +748,17 @@ void server_main(ONLINELIST *head)
                         
                         //将该客户端的信息存储在当前在线信息链表中
                         addOnlineList(head, logAll, conn_fd);
-                        server_recv(userinfoAll);
+
+                        printf("server_main中用户的信息如下:\n");
+                        printf("userinfoAll.userinfo.username:%s\n", userinfoAll.userinfo.username);
+                        printf("userinfoAll.userinfo.sex:%s\n", userinfoAll.userinfo.sex);
+                        printf("userinfoAll.userinfo.age:%d\n", userinfoAll.userinfo.age);
+                        printf("userinfoAll.userinfo.date.month:%d\n", userinfoAll.userinfo.date.month);
+                        printf("userinfoAll.userinfo.date.day:%d\n", userinfoAll.userinfo.date.day);
+                        printf("userinfoAll.userinfo.constell:%s\n", userinfoAll.userinfo.constell);
+                        printf("userinfoAll.userinfo.sentence:%s\n",userinfoAll.userinfo.sentence);
+
+                        server_recv(userinfoAll, tmpUsernumChar, head);
                     }
                 }
                 closedir(dir);
@@ -619,6 +923,7 @@ void server_init(int argc, char *argv[])
         }
 
         printf("接收到了一个新的客户端, ip地址是:%s\n", inet_ntoa(cli_addr.sin_addr));
+        printf("接收到了一个新的客户端, conn_fd是:%d\n", conn_fd);
         
         pthread_create(&pid, NULL, (void *)server_main, &head);
         printf("线程创建之后!\n");
